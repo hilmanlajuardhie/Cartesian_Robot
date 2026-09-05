@@ -21,7 +21,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,7 +48,18 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
+#define MAX_ROWS 10
+#define MAX_COLS 20
+#define STEPS_PER_UNIT 10
 
+int current_row = 0;
+int current_col = 0;
+
+#define RX_BUFFER_SIZE 10
+uint8_t rx_byte;
+char rx_str_buffer[RX_BUFFER_SIZE];
+uint8_t rx_index = 0;
+volatile uint8_t command_ready = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,7 +74,61 @@ static void MX_USB_PCD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void delay_us(uint32_t us) {
+    us *= 8; // Multiplier tuned for 8MHz default clock speed
+    while (us--) {
+        __NOP();
+    }
+}
 
+void execute_motor_steps(const char* axis_name, int total_steps, int forward) {
+    if (strcmp(axis_name, "Vertical") == 0) {
+        GPIO_PinState dir_state = forward ? GPIO_PIN_SET : GPIO_PIN_RESET;
+        // Uses the generated CubeMX pin labels for PB1 and PB4
+        HAL_GPIO_WritePin(GPIOB, Y1_DIR_Pin | Y2_DIR_Pin, dir_state);
+
+        for (int i = 0; i < total_steps; i++) {
+            // Uses generated pin labels for PB0 and PB3 (Step pulses)
+            HAL_GPIO_WritePin(GPIOB, Y1_STEP_Pin | Y2_STEP_Pin, GPIO_PIN_SET);
+            delay_us(5);
+            HAL_GPIO_WritePin(GPIOB, Y1_STEP_Pin | Y2_STEP_Pin, GPIO_PIN_RESET);
+            delay_us(5);
+        }
+    } else {
+        GPIO_PinState dir_state = forward ? GPIO_PIN_SET : GPIO_PIN_RESET;
+        HAL_GPIO_WritePin(GPIOB, X_DIR_Pin, dir_state);
+
+        for (int i = 0; i < total_steps; i++) {
+            HAL_GPIO_WritePin(GPIOB, X_STEP_Pin, GPIO_PIN_SET);
+            delay_us(5);
+            HAL_GPIO_WritePin(GPIOB, X_STEP_Pin, GPIO_PIN_RESET);
+            delay_us(5);
+        }
+    }
+}
+
+void move_to_coordinate(int target_row, int target_col) {
+    if (target_row < 0 || target_row >= MAX_ROWS || target_col < 0 || target_col >= MAX_COLS) {
+        return;
+    }
+
+    int row_diff = target_row - current_row;
+    int col_diff = target_col - current_col;
+
+    if (row_diff != 0) {
+        int forward = (row_diff > 0) ? 1 : 0;
+        int total_steps = abs(row_diff) * STEPS_PER_UNIT;
+        execute_motor_steps("Vertical", total_steps, forward);
+        current_row = target_row;
+    }
+
+    if (col_diff != 0) {
+        int forward = (col_diff > 0) ? 1 : 0;
+        int total_steps = abs(col_diff) * STEPS_PER_UNIT;
+        execute_motor_steps("Horizontal", total_steps, forward);
+        current_col = target_col;
+    }
+}
 /* USER CODE END 0 */
 
 /**
@@ -104,6 +171,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  if (command_ready) {
+	          command_ready = 0;
+
+	          int target_r = -1;
+	          int target_c = 0;
+            char row_char;
+
+	          if (sscanf(rx_str_buffer, " %c %d", &row_char, &target_c) == 2) {
+              if (row_char >= 'A' && row_char <= 'J') {
+                  target_r = row_char - 'A';
+              } else if (row_char >= 'a' && row_char <= 'j') {
+                  target_r = row_char - 'a';
+              }
+              
+            if (target_r >= 0){
+              move_to_coordinate(target_r, target_c);
+            }
+            
+	          }
+	  }  
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -291,7 +378,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART1) {
+        if (rx_byte == '\n' || rx_byte == '\r') {
+            if (rx_index > 0) {
+                rx_str_buffer[rx_index] = '\0';
+                command_ready = 1;
+                rx_index = 0;
+            }
+        } else {
+            if (rx_index < (RX_BUFFER_SIZE - 1)) {
+                rx_str_buffer[rx_index++] = rx_byte;
+            }
+        }
 
+        HAL_UART_Receive_IT(&huart1, &rx_byte, 1);
+    }
+}
 /* USER CODE END 4 */
 
 /**
