@@ -170,11 +170,21 @@ int main(void)
 	  if (command_ready) {
 	          command_ready = 0;
 
-	          int target_r = 0;
+	          int target_r = -1;
 	          int target_c = 0;
+            char row_char;
 
-	          if (sscanf(rx_str_buffer, "%d %d", &target_r, &target_c) == 2) {
-	              move_to_coordinate(target_r, target_c);
+	          if (sscanf(rx_str_buffer, " %c %d", &row_char, &target_c) == 2) {
+              if (row_char >= 'A' && row_char <= 'J') {
+                  target_r = row_char - 'A';
+              } else if (row_char >= 'a' && row_char <= 'j') {
+                  target_r = row_char - 'a';
+              }
+              
+            if (target_r >= 0){
+              move_to_coordinate(target_r, target_c);
+            }
+            
 	          }
 	  }
     /* USER CODE END WHILE */

@@ -23,7 +23,7 @@ void print_board(void) {
     printf("\n");
 
     for (int r = 0; r < MAX_ROWS; r++) {
-        printf("%2d |", r);
+        printf("%2c |", 'A' + r);
         for (int c = 0; c < MAX_COLS; c++) {
             if (r == current_row && c == current_col) {
                 printf(" H ");
@@ -39,7 +39,7 @@ void print_board(void) {
 }
 
 void simulate_motor(const char* axis_name, int total_steps, int forward) {
-    if(strcmp(axis_name, "Vertical") == 0){
+    if(strcmp(axis_name, "Horizontal") == 0){
         printf("[SIMULATION] Driving %s axis [%s]\n", 
                axis_name, forward ? "RIGHT" : "LEFT");
     }else{
@@ -63,7 +63,7 @@ void simulate_motor(const char* axis_name, int total_steps, int forward) {
 
 void move_to_coordinate(int target_row, int target_col) {
     if (target_row < 0 || target_row >= MAX_ROWS || target_col < 0 || target_col >= MAX_COLS) {
-        printf("\n[ERROR] Target out of bounds! Valid Range: Rows [0-9], Cols [0-19].\n");
+        printf("\n[ERROR] Target out of bounds! Cols [0-19].\n");
         return;
     }
 
@@ -96,15 +96,30 @@ void move_to_coordinate(int target_row, int target_col) {
 int main(void) {
     print_board();
 
+    char row_char;
     int target_r, target_c;
     while (1) {
-        printf("\nRow (0-9) | Column (0-19) | Exit (-1)\n");
+        printf("\nRow (A-J) | Column (0-19) | Exit (-1)\n");
         printf("\nSyntax: [Row] [Space] [Column]");
         printf("\nEnter Coordinate: ");
-        if (scanf("%d", &target_r) != 1) break;
-        if (target_r == -1) break;
+        if (scanf(" %c", &row_char) != 1) break;
+        if (target_r == -1){
+            int dummy;
+            scanf("%d", &dummy);
+            break;
+        } 
         if (scanf("%d", &target_c) != 1) break;
         printf("\n");
+
+        if (row_char >= 'A' && row_char <= 'J'){
+            target_r = row_char - 'A';
+        }else if (row_char >= 'a' && row_char <= 'j'){
+            target_r = row_char - 'a';
+        }else{
+            printf("[ERROR] Invalid Row! Use A to J.\n");
+            continue;
+        }
+        
         
         move_to_coordinate(target_r, target_c);
     }
